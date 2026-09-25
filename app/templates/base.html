@@ -21,41 +21,7 @@
     </header>
     
     <main class="dashboard-container">
-        <!-- Ward Selection -->
-        <section class="card section-ward-selection">
-            <h2>Select Ward</h2>
-            <div class="ward-cards">
-                <div class="ward-card" data-ward="Ward 1">
-                    <div class="ward-icon">🏠</div>
-                    <h3>Ward 1</h3>
-                </div>
-                <div class="ward-card" data-ward="Ward 2">
-                    <div class="ward-icon">🏠</div>
-                    <h3>Ward 2</h3>
-                </div>
-            </div>
-            <p id="selected-ward-display" class="selection-display">No ward selected</p>
-        </section>
-
-        <!-- Duration Control -->
-        <section class="card section-duration">
-            <h2>Water Supply Duration</h2>
-            <div class="duration-control">
-                <input type="number" id="duration-input" min="1" max="60" placeholder="Min">
-                <span>minutes</span>
-            </div>
-            <p class="hint">Enter a duration between 1 and 60 minutes.</p>
-        </section>
-
-        <!-- Controls -->
-        <section class="section-controls">
-            <button id="btn-start" class="btn btn-primary">START SUPPLY</button>
-            <button id="btn-stop" class="btn btn-danger" disabled>STOP SUPPLY</button>
-        </section>
         
-        <!-- Error message display -->
-        <div id="error-message" class="error-message hidden"></div>
-
         <!-- System Status Cards -->
         <section class="section-status-cards">
             <div class="status-card pump-status">
@@ -76,13 +42,96 @@
             </div>
         </section>
 
-        <!-- Recent Activity -->
-        <section class="card section-activity">
-            <h2>Recent Activity</h2>
-            <ul id="activity-list" class="activity-list">
-                <li class="empty-activity">No recent activity</li>
-            </ul>
+        <!-- Global Control for Running Supply -->
+        <section class="section-controls">
+            <button id="btn-stop-global" class="btn btn-danger hidden">STOP RUNNING SUPPLY</button>
         </section>
+
+        <!-- Error message display -->
+        <div id="error-message" class="error-message hidden"></div>
+        <div id="success-message" class="success-message hidden"></div>
+
+        <div class="main-grid">
+            <div class="grid-left">
+                <!-- Create Supply Schedule -->
+                <section class="card section-create-schedule">
+                    <h2>Create Supply Schedule</h2>
+                    <div class="ward-cards">
+                        <div class="ward-card" data-ward="Ward 1">
+                            <div class="ward-icon">🏠</div>
+                            <h3>Ward 1</h3>
+                        </div>
+                        <div class="ward-card" data-ward="Ward 2">
+                            <div class="ward-icon">🏠</div>
+                            <h3>Ward 2</h3>
+                        </div>
+                    </div>
+                    <p id="selected-ward-display" class="selection-display">No ward selected</p>
+                    
+                    <div class="duration-section">
+                        <h4>Water Supply Duration</h4>
+                        <div class="duration-control">
+                            <input type="number" id="duration-input" min="1" max="60" placeholder="Min">
+                            <span>minutes</span>
+                        </div>
+                        <p class="hint">Enter a duration between 1 and 60 minutes.</p>
+                    </div>
+
+                    <button id="btn-create" class="btn btn-primary">CREATE SCHEDULE</button>
+                </section>
+
+                <!-- Recent Activity -->
+                <section class="card section-activity">
+                    <h2>Recent Activity</h2>
+                    <ul id="activity-list" class="activity-list">
+                        <li class="empty-activity">No recent activity</li>
+                    </ul>
+                </section>
+            </div>
+
+            <div class="grid-right">
+                <!-- Scheduled Supplies -->
+                <section class="card section-schedules">
+                    <h2>Scheduled Supplies</h2>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Ward</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="schedules-tbody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- Supply History -->
+                <section class="card section-history">
+                    <h2>Supply History</h2>
+                    <div class="table-responsive">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Ward</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
+                                    <th>Started</th>
+                                    <th>Finished</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-tbody">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+            </div>
+        </div>
     </main>
     
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
