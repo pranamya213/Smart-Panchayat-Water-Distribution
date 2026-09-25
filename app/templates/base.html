@@ -4,25 +4,87 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Smart Panchayat Water Distribution</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
-    <header>
-        <h1>Smart Panchayat Water Distribution</h1>
-        <p>Welcome to the Automated Rural Water Management System</p>
+    <header class="app-header">
+        <div class="header-content">
+            <div class="titles">
+                <h1>Smart Panchayat Water Distribution</h1>
+                <p>Water Supply Monitoring & Control</p>
+            </div>
+            <div class="system-status">
+                <span class="status-indicator">●</span> System Online
+            </div>
+        </div>
     </header>
     
-    <main>
-        <section class="dashboard">
-            <h2>Panchayat Water Distribution Dashboard</h2>
-            <p>System status and controls will be displayed here.</p>
+    <main class="dashboard-container">
+        <!-- Ward Selection -->
+        <section class="card section-ward-selection">
+            <h2>Select Ward</h2>
+            <div class="ward-cards">
+                <div class="ward-card" data-ward="Ward 1">
+                    <div class="ward-icon">🏠</div>
+                    <h3>Ward 1</h3>
+                </div>
+                <div class="ward-card" data-ward="Ward 2">
+                    <div class="ward-icon">🏠</div>
+                    <h3>Ward 2</h3>
+                </div>
+            </div>
+            <p id="selected-ward-display" class="selection-display">No ward selected</p>
+        </section>
+
+        <!-- Duration Control -->
+        <section class="card section-duration">
+            <h2>Water Supply Duration</h2>
+            <div class="duration-control">
+                <input type="number" id="duration-input" min="1" max="60" placeholder="Min">
+                <span>minutes</span>
+            </div>
+            <p class="hint">Enter a duration between 1 and 60 minutes.</p>
+        </section>
+
+        <!-- Controls -->
+        <section class="section-controls">
+            <button id="btn-start" class="btn btn-primary">START SUPPLY</button>
+            <button id="btn-stop" class="btn btn-danger" disabled>STOP SUPPLY</button>
+        </section>
+        
+        <!-- Error message display -->
+        <div id="error-message" class="error-message hidden"></div>
+
+        <!-- System Status Cards -->
+        <section class="section-status-cards">
+            <div class="status-card pump-status">
+                <h4>PUMP STATUS</h4>
+                <div class="status-value" id="pump-status">STOPPED</div>
+            </div>
+            <div class="status-card power-status">
+                <h4>POWER STATUS</h4>
+                <div class="status-value">POWER AVAILABLE</div>
+            </div>
+            <div class="status-card current-ward">
+                <h4>CURRENT WARD</h4>
+                <div class="status-value" id="current-ward">NO WARD SELECTED</div>
+            </div>
+            <div class="status-card remaining-time">
+                <h4>REMAINING TIME</h4>
+                <div class="status-value time-display" id="remaining-time">00:00</div>
+            </div>
+        </section>
+
+        <!-- Recent Activity -->
+        <section class="card section-activity">
+            <h2>Recent Activity</h2>
+            <ul id="activity-list" class="activity-list">
+                <li class="empty-activity">No recent activity</li>
+            </ul>
         </section>
     </main>
     
-    <footer>
-        <p>&copy; 2026 Smart Panchayat Water Distribution Project</p>
-    </footer>
-
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>
