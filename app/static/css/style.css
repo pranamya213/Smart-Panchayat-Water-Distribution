@@ -1,0 +1,77 @@
+/* Professional rural/community water-management theme */
+:root {
+    --primary-blue: #005f73;
+    --light-blue: #94d2bd;
+    --dark-green: #0a9396;
+    --earth-brown: #bb9457;
+    --background-color: #f8f9fa;
+    --text-dark: #333333;
+    --text-light: #ffffff;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 0;
+    padding: 0;
+    background-color: var(--background-color);
+    color: var(--text-dark);
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+header {
+    background: linear-gradient(135deg, var(--primary-blue), var(--dark-green));
+    color: var(--text-light);
+    padding: 2rem 1rem;
+    text-align: center;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+}
+
+header h1 {
+    margin: 0 0 10px 0;
+    font-size: 2.5rem;
+}
+
+header p {
+    margin: 0;
+    font-size: 1.2rem;
+    opacity: 0.9;
+}
+
+main {
+    flex: 1;
+    max-width: 1200px;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 2rem auto;
+    padding: 0 1rem;
+}
+
+.dashboard {
+    background-color: var(--text-light);
+    border-radius: 8px;
+    padding: 3rem 2rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    border-top: 5px solid var(--light-blue);
+    text-align: center;
+}
+
+.dashboard h2 {
+    color: var(--primary-blue);
+    margin-top: 0;
+    font-size: 2rem;
+}
+
+.dashboard p {
+    color: #666;
+    font-size: 1.1rem;
+}
+
+footer {
+    background-color: var(--text-dark);
+    color: var(--text-light);
+    text-align: center;
+    padding: 1.5rem;
+    margin-top: auto;
+}
