@@ -28,9 +28,9 @@
                 <h4>PUMP STATUS</h4>
                 <div class="status-value" id="pump-status">STOPPED</div>
             </div>
-            <div class="status-card power-status">
+            <div class="status-card power-status" id="power-card">
                 <h4>POWER STATUS</h4>
-                <div class="status-value">POWER AVAILABLE</div>
+                <div class="status-value" id="power-status">POWER AVAILABLE</div>
             </div>
             <div class="status-card current-ward">
                 <h4>CURRENT WARD</h4>
@@ -43,8 +43,10 @@
         </section>
 
         <!-- Global Control for Running Supply -->
-        <section class="section-controls">
+        <section class="section-controls" style="display: flex; gap: 10px; flex-wrap: wrap;">
             <button id="btn-stop-global" class="btn btn-danger hidden">STOP RUNNING SUPPLY</button>
+            <button id="btn-power-fail" class="btn" style="background-color: #f59e0b; color: white;">SIMULATE POWER FAILURE</button>
+            <button id="btn-power-restore" class="btn hidden" style="background-color: #10b981; color: white;">RESTORE POWER</button>
         </section>
 
         <!-- Error message display -->

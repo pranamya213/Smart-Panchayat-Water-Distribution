@@ -5,11 +5,15 @@ document.addEventListener('DOMContentLoaded', () => {
     const durationInput = document.getElementById('duration-input');
     const btnCreate = document.getElementById('btn-create');
     const btnStopGlobal = document.getElementById('btn-stop-global');
+    const btnPowerFail = document.getElementById('btn-power-fail');
+    const btnPowerRestore = document.getElementById('btn-power-restore');
     
     const errorMessage = document.getElementById('error-message');
     const successMessage = document.getElementById('success-message');
     
     const pumpStatusEl = document.getElementById('pump-status');
+    const powerStatusEl = document.getElementById('power-status');
+    const powerCardEl = document.getElementById('power-card');
     const currentWardEl = document.getElementById('current-ward');
     const remainingTimeEl = document.getElementById('remaining-time');
     
@@ -103,6 +107,46 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Power Fail
+    btnPowerFail.addEventListener('click', () => {
+        btnPowerFail.disabled = true;
+        fetch('/api/power/fail', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            btnPowerFail.disabled = false;
+            if (data.error) {
+                showError(data.error);
+            } else {
+                logActivity(`Power failure detected`);
+                fetchStatus();
+            }
+        })
+        .catch(err => {
+            btnPowerFail.disabled = false;
+            showError("Failed to simulate power failure.");
+        });
+    });
+
+    // Power Restore
+    btnPowerRestore.addEventListener('click', () => {
+        btnPowerRestore.disabled = true;
+        fetch('/api/power/restore', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            btnPowerRestore.disabled = false;
+            if (data.error) {
+                showError(data.error);
+            } else {
+                logActivity(`Power restored`);
+                fetchStatus();
+            }
+        })
+        .catch(err => {
+            btnPowerRestore.disabled = false;
+            showError("Failed to restore power.");
+        });
+    });
+
     // Fetch Status
     function fetchStatus() {
         fetch('/api/status')
@@ -116,38 +160,54 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateDashboard(data) {
         const running = data.running;
         const allSchedules = data.schedules;
+        const powerStatus = data.power_status || 'POWER AVAILABLE';
         
-        // Handle Running State
+        // Update Power Status
+        powerStatusEl.textContent = powerStatus;
+        if (powerStatus === 'POWER FAILURE') {
+            powerStatusEl.style.color = '#dc2626'; // red
+            powerCardEl.style.borderColor = '#dc2626';
+            btnPowerFail.classList.add('hidden');
+            btnPowerRestore.classList.remove('hidden');
+        } else {
+            powerStatusEl.style.color = '#10b981'; // green
+            powerCardEl.style.borderColor = '#e2e8f0'; // default
+            btnPowerFail.classList.remove('hidden');
+            btnPowerRestore.classList.add('hidden');
+        }
+        
+        // Handle Running/Paused State
         if (running) {
             if (runningScheduleId !== running.id) {
-                // Newly started or page refreshed
                 runningScheduleId = running.id;
-                remainingSecondsLocal = running.current_remaining;
-                
+            }
+            remainingSecondsLocal = running.current_remaining;
+            currentWardEl.textContent = running.ward;
+            
+            if (running.status === 'POWER_FAILURE') {
+                pumpStatusEl.textContent = "STOPPED";
+                pumpStatusEl.className = "status-value stopped";
+                btnStopGlobal.classList.add('hidden');
+                clearInterval(localTimerInterval);
+                localTimerInterval = null;
+                updateTimeDisplay();
+            } else {
                 pumpStatusEl.textContent = "RUNNING";
                 pumpStatusEl.className = "status-value running";
-                currentWardEl.textContent = running.ward;
-                
                 btnStopGlobal.classList.remove('hidden');
                 
-                startLocalCountdown();
-                
-                // Only log if it's new to us, but for a simple approach we just trust DB
-                // In a perfect system we check if we already logged it.
-            } else {
-                // Sync remaining time with server to avoid drift
-                remainingSecondsLocal = running.current_remaining;
+                if (!localTimerInterval) {
+                    startLocalCountdown();
+                }
             }
         } else {
             if (runningScheduleId !== null) {
-                // It just stopped or completed
                 runningScheduleId = null;
                 clearInterval(localTimerInterval);
                 localTimerInterval = null;
                 
                 pumpStatusEl.textContent = "STOPPED";
                 pumpStatusEl.className = "status-value stopped";
-                // Keep the current ward visible but update time to 00:00
                 remainingSecondsLocal = 0;
                 updateTimeDisplay();
                 
@@ -188,7 +248,7 @@ document.addEventListener('DOMContentLoaded', () => {
         schedulesTbody.innerHTML = '';
         historyTbody.innerHTML = '';
         
-        const activeStatuses = ['SCHEDULED', 'RUNNING'];
+        const activeStatuses = ['SCHEDULED', 'RUNNING', 'POWER_FAILURE'];
         
         schedules.forEach(sch => {
             if (activeStatuses.includes(sch.status)) {
@@ -199,12 +259,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     actionHTML = `<button class="btn btn-primary btn-small" onclick="window.startSchedule(${sch.id})">Start</button>`;
                 } else if (sch.status === 'RUNNING') {
                     actionHTML = `<em>Running</em>`;
+                } else if (sch.status === 'POWER_FAILURE') {
+                    actionHTML = `<em>Paused</em>`;
                 }
+                
+                let displayStatus = sch.status;
+                if (sch.status === 'POWER_FAILURE') displayStatus = 'POWER FAILURE — SUPPLY PAUSED';
                 
                 tr.innerHTML = `
                     <td>${sch.ward}</td>
                     <td>${sch.duration_minutes} min</td>
-                    <td><span class="status-badge status-${sch.status}">${sch.status}</span></td>
+                    <td><span class="status-badge status-${sch.status}">${displayStatus}</span></td>
                     <td>${actionHTML}</td>
                 `;
                 schedulesTbody.appendChild(tr);

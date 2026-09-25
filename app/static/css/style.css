@@ -371,6 +371,7 @@ body {
 .status-RUNNING { background: #dcfce7; color: #15803d; }
 .status-COMPLETED { background: #f3f4f6; color: #374151; }
 .status-STOPPED { background: #fee2e2; color: #b91c1c; }
+.status-POWER_FAILURE { background: #fef3c7; color: #92400e; }
 
 /* Recent Activity */
 .activity-list {

@@ -13,14 +13,21 @@ def index():
 def get_status():
     db = get_db()
     
+    power_row = db.execute("SELECT value FROM system_state WHERE key = 'power_status'").fetchone()
+    power_status = power_row['value'] if power_row else 'POWER AVAILABLE'
+
     # Auto-complete any RUNNING supplies whose time has elapsed
     running = db.execute("SELECT * FROM supply_schedule WHERE status = 'RUNNING'").fetchone()
+    now = datetime.datetime.now()
     if running:
-        started_at = running['started_at']
-        duration = running['duration_minutes']
-        now = datetime.datetime.now()
-        elapsed = (now - started_at).total_seconds()
-        remaining = int(duration * 60 - elapsed)
+        ref_time = running['resumed_at'] if running['resumed_at'] else running['started_at']
+        if isinstance(ref_time, str):
+            ref_time = datetime.datetime.strptime(ref_time.split('.')[0], "%Y-%m-%d %H:%M:%S")
+        
+        base_rem = running['remaining_seconds'] if running['remaining_seconds'] is not None else running['duration_minutes'] * 60
+        elapsed = (now - ref_time).total_seconds()
+        remaining = int(base_rem - elapsed)
+        
         if remaining <= 0:
             db.execute("UPDATE supply_schedule SET status = 'COMPLETED', completed_at = ?, remaining_seconds = 0 WHERE id = ?", (now, running['id']))
             db.commit()
@@ -33,25 +40,28 @@ def get_status():
     for row in schedules:
         r = dict(row)
         # Format timestamps
-        for field in ['scheduled_at', 'started_at', 'completed_at', 'stopped_at', 'created_at']:
-            if r[field]:
+        for field in ['scheduled_at', 'started_at', 'completed_at', 'stopped_at', 'resumed_at', 'power_failure_at', 'created_at']:
+            if r.get(field):
                 r[field] = r[field].strftime("%Y-%m-%d %H:%M:%S") if isinstance(r[field], datetime.datetime) else str(r[field])
         
         if r['status'] == 'RUNNING':
-            if row['started_at']:
-                started_at = row['started_at']
-                if isinstance(started_at, str):
-                    started_at = datetime.datetime.strptime(started_at, "%Y-%m-%d %H:%M:%S.%f")
-                duration = row['duration_minutes']
-                now = datetime.datetime.now()
-                elapsed = (now - started_at).total_seconds()
-                remaining = int(duration * 60 - elapsed)
-                r['current_remaining'] = remaining if remaining > 0 else 0
+            ref_time = row['resumed_at'] if row['resumed_at'] else row['started_at']
+            if isinstance(ref_time, str):
+                ref_time = datetime.datetime.strptime(ref_time.split('.')[0], "%Y-%m-%d %H:%M:%S")
+            base_rem = row['remaining_seconds'] if row['remaining_seconds'] is not None else row['duration_minutes'] * 60
+            elapsed = (now - ref_time).total_seconds()
+            remaining = int(base_rem - elapsed)
+            r['current_remaining'] = remaining if remaining > 0 else 0
+            running_supply = r
+        elif r['status'] == 'POWER_FAILURE':
+            r['current_remaining'] = row['remaining_seconds'] if row['remaining_seconds'] is not None else row['duration_minutes'] * 60
+            # Even if it's paused, we might want to show it as the current active/paused supply for UI purposes
             running_supply = r
             
         all_schedules.append(r)
         
     return jsonify({
+        'power_status': power_status,
         'running': running_supply,
         'schedules': all_schedules
     })
@@ -81,6 +91,10 @@ def create_schedule():
 @main.route('/api/schedule/<int:id>/start', methods=['POST'])
 def start_schedule(id):
     db = get_db()
+    power_row = db.execute("SELECT value FROM system_state WHERE key = 'power_status'").fetchone()
+    if power_row and power_row['value'] == 'POWER FAILURE':
+        return jsonify({'error': 'Cannot start water supply while power is unavailable.'}), 400
+
     # Check if another is running
     running = db.execute("SELECT * FROM supply_schedule WHERE status = 'RUNNING'").fetchone()
     if running:
@@ -104,13 +118,13 @@ def stop_schedule(id):
     if not schedule:
         return jsonify({'error': 'Schedule not running or not found'}), 404
         
-    started_at = schedule['started_at']
-    duration = schedule['duration_minutes']
-    if isinstance(started_at, str):
-        started_at = datetime.datetime.strptime(started_at, "%Y-%m-%d %H:%M:%S.%f")
+    ref_time = schedule['resumed_at'] if schedule['resumed_at'] else schedule['started_at']
+    if isinstance(ref_time, str):
+        ref_time = datetime.datetime.strptime(ref_time.split('.')[0], "%Y-%m-%d %H:%M:%S")
     now = datetime.datetime.now()
-    elapsed = (now - started_at).total_seconds()
-    remaining = int(duration * 60 - elapsed)
+    elapsed = (now - ref_time).total_seconds()
+    base_rem = schedule['remaining_seconds'] if schedule['remaining_seconds'] is not None else schedule['duration_minutes'] * 60
+    remaining = int(base_rem - elapsed)
     if remaining < 0: remaining = 0
     
     db.execute("UPDATE supply_schedule SET status = 'STOPPED', stopped_at = ?, remaining_seconds = ? WHERE id = ?", (now, remaining, id))
@@ -126,5 +140,39 @@ def complete_schedule(id):
         
     now = datetime.datetime.now()
     db.execute("UPDATE supply_schedule SET status = 'COMPLETED', completed_at = ?, remaining_seconds = 0 WHERE id = ?", (now, id))
+    db.commit()
+    return jsonify({'success': True})
+
+@main.route('/api/power/fail', methods=['POST'])
+def power_fail():
+    db = get_db()
+    db.execute("UPDATE system_state SET value = 'POWER FAILURE' WHERE key = 'power_status'")
+    
+    running = db.execute("SELECT * FROM supply_schedule WHERE status = 'RUNNING'").fetchone()
+    if running:
+        ref_time = running['resumed_at'] if running['resumed_at'] else running['started_at']
+        if isinstance(ref_time, str):
+            ref_time = datetime.datetime.strptime(ref_time.split('.')[0], "%Y-%m-%d %H:%M:%S")
+        now = datetime.datetime.now()
+        elapsed = (now - ref_time).total_seconds()
+        base_rem = running['remaining_seconds'] if running['remaining_seconds'] is not None else running['duration_minutes'] * 60
+        remaining = int(base_rem - elapsed)
+        if remaining < 0: remaining = 0
+        
+        db.execute("UPDATE supply_schedule SET status = 'POWER_FAILURE', power_failure_at = ?, remaining_seconds = ? WHERE id = ?", (now, remaining, running['id']))
+    
+    db.commit()
+    return jsonify({'success': True})
+
+@main.route('/api/power/restore', methods=['POST'])
+def power_restore():
+    db = get_db()
+    db.execute("UPDATE system_state SET value = 'POWER AVAILABLE' WHERE key = 'power_status'")
+    
+    paused = db.execute("SELECT * FROM supply_schedule WHERE status = 'POWER_FAILURE' ORDER BY id DESC LIMIT 1").fetchone()
+    if paused:
+        now = datetime.datetime.now()
+        db.execute("UPDATE supply_schedule SET status = 'RUNNING', resumed_at = ? WHERE id = ?", (now, paused['id']))
+        
     db.commit()
     return jsonify({'success': True})

@@ -34,7 +34,16 @@ def init_app(app):
                     completed_at TIMESTAMP,
                     stopped_at TIMESTAMP,
                     remaining_seconds INTEGER,
+                    resumed_at TIMESTAMP,
+                    power_failure_at TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             ''')
+            db.execute('''
+                CREATE TABLE IF NOT EXISTS system_state (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+            ''')
+            db.execute('INSERT OR IGNORE INTO system_state (key, value) VALUES ("power_status", "POWER AVAILABLE")')
             db.commit()
