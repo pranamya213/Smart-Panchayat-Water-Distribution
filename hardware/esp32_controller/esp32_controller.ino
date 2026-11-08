@@ -4,26 +4,21 @@
  * Component: ESP32 Central Hardware Controller
  * File: esp32_controller.ino
  * Target Board: ESP32 Dev Module
- * Phase: Phase 2 - Wi-Fi Connectivity & Heartbeat Communication
+ * Phase: Phase 3B - Ward 2 LED Actuation (Ward 1 Pump Relay Locked OFF)
  * ============================================================================
  *
  * Description:
- * Implements Wi-Fi connection to a mobile hotspot and two-way communication
- * with the central Flask backend application over HTTP REST APIs.
+ * Implements Wi-Fi connection and bidirectional communication with the Flask
+ * backend application. In Phase 3B, Ward 2 LED actuation (GPIO 25) is enabled
+ * based on server commands, while Ward 1 Pump Relay (GPIO 26) remains
+ * permanently locked OFF for physical safety.
  *
- * Requirements in Phase 2:
- * 1. Connect to mobile phone hotspot via credentials defined in config.h.
- * 2. Transmit POST /api/hardware/heartbeat every 2 seconds.
- * 3. Poll GET /api/hardware/command every 2 seconds.
- * 4. Parse and display all received JSON commands in the Serial Monitor.
- * 5. Handle Wi-Fi disconnections cleanly without freezing or crashing.
- *
- * CRITICAL SAFETY RULES (ENFORCED):
- * - GPIO 26 (Ward 1 pump relay) is locked OFF.
- * - GPIO 25 (Ward 2 status LED) is locked OFF.
- * - Outputs are forced to their inactive state BEFORE pin mode configuration.
- * - Pump and LED actuation is strictly disabled in this phase.
- * - No recovery ACK is transmitted in this phase.
+ * Requirements in Phase 3B:
+ * 1. Control Ward 2 LED (GPIO 25) based on server led_state command.
+ * 2. Keep Ward 1 Pump Relay (GPIO 26) strictly and permanently locked OFF.
+ * 3. Transmit accurate physical LED telemetry in POST /api/hardware/heartbeat.
+ * 4. Failsafe shutoff of LED on watchdog timeout, Wi-Fi loss, or power failure.
+ * 5. Preserve 2.0s heartbeat, 2.0s command polling, and 6.0s watchdog.
  * ============================================================================
  */
 
@@ -35,8 +30,8 @@
 // ----------------------------------------------------------------------------
 // Pin Definitions & Logic Levels
 // ----------------------------------------------------------------------------
-const int PUMP_RELAY_PIN = 26;  // Ward 1 DC Water Pump Relay Control
-const int WARD2_LED_PIN   = 25;  // Ward 2 Visual Status LED Indicator
+const int PUMP_RELAY_PIN = 26;  // Ward 1 DC Water Pump Relay Control (LOCKED OFF)
+const int WARD2_LED_PIN   = 25;  // Ward 2 Visual Status LED Indicator (ACTIVE)
 
 // Relay Module Polarity: Most optocoupled relay modules trigger Active-LOW (0V).
 // Set RELAY_ACTIVE_LOW = true for Active-LOW, false for Active-HIGH.
@@ -46,6 +41,9 @@ const int RELAY_ON  = RELAY_ACTIVE_LOW ? LOW  : HIGH;
 
 const int LED_OFF = LOW;
 const int LED_ON  = HIGH;
+
+// Current physical actuation states
+bool currentLedState = false;  // Ward 2 Status LED actual state (Active in Phase 3B)
 
 // ----------------------------------------------------------------------------
 // Timing Intervals & Watchdog Constants
@@ -76,12 +74,12 @@ void setup() {
   Serial.println();
   Serial.println("==================================================");
   Serial.println("  Smart Panchayat Water Distribution Controller");
-  Serial.println("  Phase 2: Wi-Fi & Heartbeat Communication");
+  Serial.println("  Phase 3B: Ward 2 LED Actuation (Pump Locked OFF)");
   Serial.println("==================================================");
 
   // 2. CRITICAL SAFETY INITIALIZATION:
   // Write the inactive level to output registers BEFORE configuring pinMode
-  // to avoid floating states or boot glitches energizing the relay coil.
+  // to avoid floating states or boot glitches energizing the relay coil or LED.
   digitalWrite(PUMP_RELAY_PIN, RELAY_OFF);
   pinMode(PUMP_RELAY_PIN, OUTPUT);
   digitalWrite(PUMP_RELAY_PIN, RELAY_OFF);
@@ -89,10 +87,11 @@ void setup() {
   digitalWrite(WARD2_LED_PIN, LED_OFF);
   pinMode(WARD2_LED_PIN, OUTPUT);
   digitalWrite(WARD2_LED_PIN, LED_OFF);
+  currentLedState = false;
 
-  Serial.println("[SAFETY] GPIO 26 (Ward 1 Pump Relay) -> FORCED OFF");
-  Serial.println("[SAFETY] GPIO 25 (Ward 2 Status LED)  -> FORCED OFF");
-  Serial.println("[SAFETY] Output actuation is DISABLED for Phase 2.");
+  Serial.println("[SAFETY] GPIO 26 (Ward 1 Pump Relay) -> FORCED & LOCKED OFF (Phase 3B)");
+  Serial.println("[SAFETY] GPIO 25 (Ward 2 Status LED)  -> INITIALIZED OFF (Actuation Active)");
+  Serial.println("[SAFETY] Ward 1 Pump Actuation is STRICTLY DISABLED in Phase 3B.");
   Serial.println("--------------------------------------------------");
 
   // 3. Initiate Wi-Fi Connection
@@ -150,9 +149,12 @@ void loop() {
     lastSuccessfulCommTime = millis();  // Re-arm watchdog on fresh connection
   } else if (!wifiConnected && wifiConnectedPrev) {
     // Just lost connection after being established
-    Serial.println("\n[Wi-Fi] Connection lost! Background auto-reconnect is active...");
+    Serial.println("\n[Wi-Fi] Connection lost! Forcing LED OFF & Background auto-reconnect active...");
     wifiConnectedPrev = false;
     lastWifiRetryTime = currentMillis;  // Start retry backoff window from disconnect event
+    digitalWrite(WARD2_LED_PIN, LED_OFF);
+    currentLedState = false;
+    digitalWrite(PUMP_RELAY_PIN, RELAY_OFF);
   }
 
   // Only manually retry if the connection was previously established and subsequently lost,
@@ -203,6 +205,7 @@ void loop() {
   if (timeSinceLastComm > WATCHDOG_TIMEOUT_MS) {
     digitalWrite(PUMP_RELAY_PIN, RELAY_OFF);
     digitalWrite(WARD2_LED_PIN, LED_OFF);
+    currentLedState = false;
 
     if (now - lastWatchdogWarningTime >= 5000) {
       lastWatchdogWarningTime = now;
@@ -231,11 +234,11 @@ void sendHeartbeat() {
   http.setTimeout(1500); // 1.5s timeout
 
   // Prepare Heartbeat JSON payload matching Flask requirements
-  // Note: pump_state and led_state are false in Phase 2
+  // Note: pump_state is locked false in Phase 3B; led_state reports actual physical state
   JsonDocument doc;
   doc["esp32_id"]   = ESP32_DEVICE_ID;
   doc["pump_state"] = false;
-  doc["led_state"]  = false;
+  doc["led_state"]  = currentLedState;
   doc["uptime_ms"]  = millis();
 
   String requestBody;
@@ -253,8 +256,8 @@ void sendHeartbeat() {
       if (!err) {
         const char* hwStatus = respDoc["hardware_online"] | "UNKNOWN";
         const char* srvTime  = respDoc["timestamp"] | "";
-        Serial.printf("[Heartbeat OK] HTTP %d | Hardware: %s | Server Time: %s\n",
-                      httpCode, hwStatus, srvTime);
+        Serial.printf("[Heartbeat OK] HTTP %d | Hardware: %s | Server Time: %s | LED State: %s\n",
+                      httpCode, hwStatus, srvTime, currentLedState ? "ON" : "OFF");
       } else {
         Serial.printf("[Heartbeat OK] HTTP %d | Response: %s\n", httpCode, response.c_str());
       }
@@ -295,29 +298,67 @@ void pollCommand() {
         const char* status       = doc["status"] | "UNKNOWN";
         const char* action       = doc["action"] | "UNKNOWN";
         const char* powerStatus  = doc["power_status"] | "UNKNOWN";
-        const char* activeWard   = doc["active_ward"] | "NONE";
+        const char* activeWard   = doc["active_ward"] | (doc["ward"] | "NONE");
         bool pumpCmd             = doc["pump_state"] | false;
         bool ledCmd              = doc["led_state"] | false;
         int remainingSec         = doc["remaining_seconds"] | 0;
 
-        Serial.printf("[Command Poll] HTTP %d | Action: %s | Power: %s | Ward: %s | Rem: %ds [Outputs Locked OFF]\n",
-                      httpCode, action, powerStatus, activeWard, remainingSec);
+        Serial.printf("[Command Poll] HTTP %d | Action: %s | Power: %s | Ward: %s | Rem: %ds | Target LED: %s\n",
+                      httpCode, action, powerStatus, activeWard, remainingSec, ledCmd ? "ON" : "OFF");
 
-        // Explicit reminder that physical actuation is intentionally suppressed in Phase 2
-        if (strcmp(action, "RUN") == 0) {
-          Serial.printf("               -> Server requests: pump=%s, led=%s (Suppressed by Phase 2 Safety)\n",
-                        pumpCmd ? "ON" : "OFF", ledCmd ? "ON" : "OFF");
-        } else if (strcmp(action, "RECOVER") == 0) {
+        // Strict Multi-Condition Validation for Ward 2 LED Actuation:
+        // GPIO 25 may ONLY turn ON when ALL of the following criteria are simultaneously satisfied:
+        // 1. status == "SUCCESS"
+        // 2. action == "RUN"
+        // 3. active_ward == "Ward 2"
+        // 4. led_state == true
+        // 5. pump_state == false (Mutual exclusivity consistency guard)
+        bool isSuccessStatus = (strcmp(status, "SUCCESS") == 0);
+        bool isRunAction     = (strcmp(action, "RUN") == 0);
+        bool isWard2         = (strcmp(activeWard, "Ward 2") == 0);
+        bool validLedCommand = isSuccessStatus && isRunAction && isWard2 && ledCmd && !pumpCmd;
+
+        // 1. ACTUATION: Ward 2 Status LED Control (GPIO 25)
+        if (validLedCommand) {
+          digitalWrite(WARD2_LED_PIN, LED_ON);
+          if (!currentLedState) {
+            Serial.println("               -> [ACTUATION] Validated Ward 2 command: LED turned ON (GPIO 25)");
+          }
+          currentLedState = true;
+        } else {
+          digitalWrite(WARD2_LED_PIN, LED_OFF);
+          if (currentLedState) {
+            Serial.println("               -> [ACTUATION] Inactive/unvalidated command: Ward 2 LED turned OFF (GPIO 25)");
+          }
+          currentLedState = false;
+        }
+
+        // 2. CRITICAL SAFETY LOCKOUT: Ward 1 Pump Relay (GPIO 26) remains permanently OFF in Phase 3B
+        digitalWrite(PUMP_RELAY_PIN, RELAY_OFF);
+        if (pumpCmd) {
+          Serial.println("               -> [SAFETY] Server requested Pump ON, but GPIO 26 is LOCKED OFF (Phase 3B).");
+        }
+
+        if (strcmp(action, "RECOVER") == 0) {
           Serial.println("               -> Interrupted schedule detected (Recovery suppressed until Phase 5)");
         }
       } else {
         Serial.printf("[Command Poll] JSON parse error: %s\n", err.c_str());
+        digitalWrite(WARD2_LED_PIN, LED_OFF);
+        currentLedState = false;
+        digitalWrite(PUMP_RELAY_PIN, RELAY_OFF);
       }
     } else {
       Serial.printf("[Command Poll WARN] HTTP Status: %d\n", httpCode);
+      digitalWrite(WARD2_LED_PIN, LED_OFF);
+      currentLedState = false;
+      digitalWrite(PUMP_RELAY_PIN, RELAY_OFF);
     }
   } else {
     Serial.printf("[Command Poll ERROR] HTTP GET failed: %s\n", http.errorToString(httpCode).c_str());
+    digitalWrite(WARD2_LED_PIN, LED_OFF);
+    currentLedState = false;
+    digitalWrite(PUMP_RELAY_PIN, RELAY_OFF);
   }
 
   http.end();
