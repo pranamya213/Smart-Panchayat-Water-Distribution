@@ -25,7 +25,7 @@
         <!-- System Status Cards -->
         <section class="section-status-cards">
             <div class="status-card pump-status">
-                <h4>PUMP STATUS</h4>
+                <h4>DISTRIBUTION STATUS</h4>
                 <div class="status-value" id="pump-status">STOPPED</div>
             </div>
             <div class="status-card power-status" id="power-card">
@@ -60,12 +60,14 @@
                     <h2>Create Supply Schedule</h2>
                     <div class="ward-cards">
                         <div class="ward-card" data-ward="Ward 1">
-                            <div class="ward-icon">🏠</div>
+                            <div class="ward-icon">💧</div>
                             <h3>Ward 1</h3>
+                            <small style="color: #64748b; font-size: 0.8rem; font-weight: 500;">Physical Flow Demo (DC Pump)</small>
                         </div>
                         <div class="ward-card" data-ward="Ward 2">
-                            <div class="ward-icon">🏠</div>
+                            <div class="ward-icon">💡</div>
                             <h3>Ward 2</h3>
+                            <small style="color: #0284c7; font-size: 0.8rem; font-weight: 500;">IoT Smart Valve (GPIO 25 LED)</small>
                         </div>
                     </div>
                     <p id="selected-ward-display" class="selection-display">No ward selected</p>

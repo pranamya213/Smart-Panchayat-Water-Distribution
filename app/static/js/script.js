@@ -38,7 +38,13 @@ document.addEventListener('DOMContentLoaded', () => {
             wardCards.forEach(c => c.classList.remove('selected'));
             card.classList.add('selected');
             selectedWard = card.dataset.ward;
-            selectedWardDisplay.textContent = `Selected Ward: ${selectedWard}`;
+            if (selectedWard === 'Ward 1') {
+                selectedWardDisplay.textContent = 'Selected Ward: Ward 1 (Physical Water Flow Demo)';
+            } else if (selectedWard === 'Ward 2') {
+                selectedWardDisplay.textContent = 'Selected Ward: Ward 2 (IoT Smart Valve & Power Recovery Demo)';
+            } else {
+                selectedWardDisplay.textContent = `Selected Ward: ${selectedWard}`;
+            }
             hideMessages();
         });
     });
@@ -182,17 +188,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 runningScheduleId = running.id;
             }
             remainingSecondsLocal = running.current_remaining;
-            currentWardEl.textContent = running.ward;
+
+            if (running.ward === 'Ward 1') {
+                currentWardEl.textContent = "Ward 1 (Physical Pump)";
+            } else if (running.ward === 'Ward 2') {
+                currentWardEl.textContent = "Ward 2 (IoT Valve LED)";
+            } else {
+                currentWardEl.textContent = running.ward;
+            }
             
             if (running.status === 'POWER_FAILURE') {
-                pumpStatusEl.textContent = "STOPPED";
+                pumpStatusEl.textContent = "PAUSED (POWER FAILURE)";
                 pumpStatusEl.className = "status-value stopped";
                 btnStopGlobal.classList.add('hidden');
                 clearInterval(localTimerInterval);
                 localTimerInterval = null;
                 updateTimeDisplay();
             } else {
-                pumpStatusEl.textContent = "RUNNING";
+                if (running.ward === 'Ward 1') {
+                    pumpStatusEl.textContent = "RUNNING (PHYSICAL FLOW)";
+                } else {
+                    pumpStatusEl.textContent = "RUNNING (LED ACTIVE)";
+                }
                 pumpStatusEl.className = "status-value running";
                 btnStopGlobal.classList.remove('hidden');
                 
@@ -206,6 +223,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearInterval(localTimerInterval);
                 localTimerInterval = null;
                 
+                currentWardEl.textContent = "NO WARD SELECTED";
                 pumpStatusEl.textContent = "STOPPED";
                 pumpStatusEl.className = "status-value stopped";
                 remainingSecondsLocal = 0;
@@ -251,6 +269,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const activeStatuses = ['SCHEDULED', 'RUNNING', 'POWER_FAILURE'];
         
         schedules.forEach(sch => {
+            let wardDisplay = sch.ward;
+            if (sch.ward === 'Ward 1') {
+                wardDisplay = 'Ward 1 <small style="display:block; color:#64748b; font-size:0.75rem;">Physical Flow Demo</small>';
+            } else if (sch.ward === 'Ward 2') {
+                wardDisplay = 'Ward 2 <small style="display:block; color:#0284c7; font-size:0.75rem;">IoT Valve (GPIO 25 LED)</small>';
+            }
+
             if (activeStatuses.includes(sch.status)) {
                 // Scheduled / Running list
                 const tr = document.createElement('tr');
@@ -267,7 +292,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (sch.status === 'POWER_FAILURE') displayStatus = 'POWER FAILURE — SUPPLY PAUSED';
                 
                 tr.innerHTML = `
-                    <td>${sch.ward}</td>
+                    <td>${wardDisplay}</td>
                     <td>${sch.duration_minutes} min</td>
                     <td><span class="status-badge status-${sch.status}">${displayStatus}</span></td>
                     <td>${actionHTML}</td>
@@ -278,7 +303,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const tr = document.createElement('tr');
                 const finishedTime = sch.completed_at || sch.stopped_at || '-';
                 tr.innerHTML = `
-                    <td>${sch.ward}</td>
+                    <td>${wardDisplay}</td>
                     <td>${sch.duration_minutes} min</td>
                     <td><span class="status-badge status-${sch.status}">${sch.status}</span></td>
                     <td>${sch.started_at ? sch.started_at.split(' ')[1] : '-'}</td>
